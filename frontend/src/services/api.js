@@ -1,4 +1,29 @@
+// API client: fetch wrapper for the FlowCast + BarrierLens backend (envelope-aware).
+
 const BASE = '/api/v1';
+
+// Safari throws a cryptic TypeError ("The string did not match the expected pattern.")
+// when the response body isn't JSON — e.g. a gateway/proxy 404 page instead of the API.
+// Translate that into a readable error so users see what actually went wrong.
+async function parseJson(res, fallback) {
+  try {
+    return await res.json();
+  } catch {
+    throw new Error(
+      `${fallback}: server returned a non-JSON response (HTTP ${res.status}). ` +
+      'The FlowCast API is not reachable from this site.'
+    );
+  }
+}
+
+// FastAPI errors use { detail: string | ValidationError[] }; the app envelope uses { errors: [] }.
+function messageFrom(json, res, fallback) {
+  if (Array.isArray(json?.errors) && json.errors.length) return json.errors[0];
+  if (typeof json?.detail === 'string') return json.detail;
+  if (json?.detail) return 'Validation failed — check the form fields and try again.';
+  if (!json?.success) return `${fallback} (HTTP ${res.status})`;
+  return null;
+}
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('token');
@@ -6,8 +31,9 @@ async function request(path, options = {}) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
-  const json = await res.json();
-  if (!json.success) throw new Error(json.errors?.[0] || 'Request failed');
+  const json = await parseJson(res, 'Request failed');
+  const error = messageFrom(json, res, 'Request failed');
+  if (error) throw new Error(error);
   return json.data;
 }
 
@@ -31,8 +57,9 @@ export const api = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.errors?.[0] || 'Upload failed');
+    const json = await parseJson(res, 'Upload failed');
+    const error = messageFrom(json, res, 'Upload failed');
+    if (error) throw new Error(error);
     return json.data;
   },
 
