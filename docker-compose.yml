@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: flowcast
+      POSTGRES_PASSWORD: flowcast
+      POSTGRES_DB: flowcast
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Inside the compose network the DB host is `db`, not localhost
+      DATABASE_URL: postgresql+asyncpg://flowcast:flowcast@db:5432/flowcast
+      DATABASE_URL_SYNC: postgresql://flowcast:flowcast@db:5432/flowcast
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+      - uploads:/app/uploads
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  osrm:
+    image: osrm/osrm-backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./ml/data:/data
+    command: osrm-routed --algorithm mld /data/pilot.osrm
+
+volumes:
+  pgdata:
+  uploads:

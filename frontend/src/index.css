@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+body {
+  overscroll-behavior: none;
+}
+
+.glass {
+  @apply bg-white/90 backdrop-blur-xl border border-white/30 shadow-lg;
+}
+.glass-dark {
+  @apply bg-gray-900/90 backdrop-blur-xl border border-white/10 shadow-lg;
+}
+.route-card {
+  @apply rounded-lg transition-all duration-200;
+}
+.route-card:active {
+  @apply scale-[0.98];
+}
+@media (hover: hover) {
+  .route-card:hover {
+    @apply scale-[1.02];
+  }
+}
+.route-card-fast {
+  @apply border-l-4 border-route-fast bg-blue-50;
+}
+.route-card-green {
+  @apply border-l-4 border-route-green bg-emerald-50;
+}
+.route-card-reliable {
+  @apply border-l-4 border-route-reliable bg-amber-50;
+}
+.route-card-accessible {
+  @apply border-l-4 border-route-accessible bg-purple-50;
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  touch-action: manipulation;
+}
+
+/* Mobile bottom sheet smooth transition */
+@media (max-width: 639px) {
+  .leaflet-control-zoom {
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+  }
+  .leaflet-control-zoom a {
+    width: 36px !important;
+    height: 36px !important;
+    line-height: 36px !important;
+    font-size: 18px !important;
+  }
+}
+
+/* Smooth scrolling in panels */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area for notch devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
