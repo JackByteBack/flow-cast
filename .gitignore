@@ -28,3 +28,6 @@ Thumbs.db
 ml/models/*.pkl
 ml/models/*.joblib
 ml/data/*.osrm
+
+# Project docs (local only)
+brain/
