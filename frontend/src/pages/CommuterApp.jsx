@@ -4,10 +4,10 @@ import { api } from '../services/api';
 import MapView from '../components/Map/MapView';
 import RoutePanel from '../components/RoutePanel/RoutePanel';
 import BarrierLensUpload from '../components/BarrierLens/BarrierLensUpload';
-import { LogOut, LayoutDashboard, Camera, Route, ChevronUp, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, Camera, Route, ChevronUp, ChevronDown } from 'lucide-react';
 
 export default function CommuterApp() {
-  const { user, logout, routes, setRoutes } = useStore();
+  const { routes, setRoutes } = useStore();
   const [origin, setOrigin] = useState(null);
   const [destination, setDestination] = useState(null);
   const [priority, setPriority] = useState('fast');
@@ -59,9 +59,6 @@ export default function CommuterApp() {
           >
             <LayoutDashboard className="w-5 h-5 text-gray-600" />
           </a>
-          <button onClick={logout} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Logout">
-            <LogOut className="w-5 h-5 text-gray-600" />
-          </button>
         </div>
       </header>
 

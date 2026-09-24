@@ -28,10 +28,7 @@ function messageFrom(json, res, fallback) {
 }
 
 async function request(path, options = {}) {
-  const token = localStorage.getItem('token');
   const headers = { 'Content-Type': 'application/json', ...options.headers };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
   const json = await parseJson(res, 'Request failed');
   const error = messageFrom(json, res, 'Request failed');
@@ -40,10 +37,6 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  register: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
-  login: (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
-  me: () => request('/auth/me'),
-
   calculateRoutes: (data) => request('/routes/calculate', { method: 'POST', body: JSON.stringify(data) }),
   routeHistory: () => request('/routes/history'),
 
@@ -51,12 +44,10 @@ export const api = {
   getHotspots: () => request('/traffic/hotspots'),
 
   uploadPhoto: async (file, lat, lng, address) => {
-    const token = localStorage.getItem('token');
     const form = new FormData();
     form.append('file', file);
     const res = await fetch(`${BASE}/barrierlens/upload?lat=${lat}&lng=${lng}&address=${encodeURIComponent(address)}`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     });
     const json = await parseJson(res, 'Upload failed');

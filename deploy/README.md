@@ -8,8 +8,8 @@ The site has two halves:
 | FastAPI + Postgres | **This Docker stack on your VPS** | `https://YOUR-BACKEND-DOMAIN` |
 
 `frontend/vercel.json` rewrites `/api/*` and `/uploads/*` to the backend domain, so
-the browser only ever talks to `flow-cast-ashen.vercel.app` and login works exactly
-like it does locally behind nginx.
+the browser only ever talks to `flow-cast-ashen.vercel.app` and API calls work exactly
+like they do locally behind nginx.
 
 ## 1. Create the server
 
@@ -89,12 +89,11 @@ If your repo is connected to Vercel, it redeploys automatically. Otherwise run
 ## 8. Verify
 
 ```bash
-# must return JSON (an auth error), not HTML:
-curl -X POST https://flow-cast-ashen.vercel.app/api/v1/auth/login \
-  -H 'Content-Type: application/json' -d '{"email":"you@example.com","password":"..."}'
+# must return JSON (HTTP 200), not HTML:
+curl https://flow-cast-ashen.vercel.app/api/v1/dashboard/stats
 ```
 
-Then log in on the site.
+Then open the site — the map app loads directly (no login page).
 
 ## Updating later
 
@@ -113,8 +112,8 @@ docker compose exec -T db pg_dump -U flowcast flowcast > backup.sql
 
 | Symptom | Fix |
 |---|---|
-| `POST /api/... login → 405 / HTML` on the live site | `frontend/vercel.json` still has `YOUR-DOMAIN.example`, or Vercel hasn't redeployed |
+| `/api/... → 405 / HTML` on the live site | `frontend/vercel.json` still has `YOUR-DOMAIN.example`, or Vercel hasn't redeployed |
 | `curl: (60) SSL certificate problem` right after first start | Wait 30s — Caddy is fetching the Let's Encrypt cert; it retries automatically |
-| Login page says "server returned a non-JSON response" | Backend down: `docker compose ps` and `docker compose logs backend` |
+| Site shows "server returned a non-JSON response" | Backend down: `docker compose ps` and `docker compose logs backend` |
 | Photo uploads fail only on the live site (>4 MB) | Vercel's proxy may cap the body size. In Vercel → Settings → Environment Variables add `VITE_API_BASE=https://api.yourdomain.com/api/v1` and redeploy; the browser then talks to the backend directly (CORS already allows the Vercel origin) |
 | `502 Bad Gateway` from Caddy | Backend crashed — `docker compose logs backend` |

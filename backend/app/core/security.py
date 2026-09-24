@@ -1,5 +1,6 @@
 """JWT authentication and password hashing."""
 
+import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -9,6 +10,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -57,4 +59,37 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+
+GUEST_EMAIL = "guest@flowcast.local"
+
+
+async def get_guest_user(db: AsyncSession):
+    """Return the shared guest user, creating it on first use.
+
+    The app has no login: endpoints that need a user_id attach their rows
+    to this single auto-created account instead. No migration required.
+    """
+    from app.models.user import User
+
+    result = await db.execute(select(User).where(User.email == GUEST_EMAIL))
+    user = result.scalar_one_or_none()
+    if user:
+        return user
+
+    # The hash is a random, unusable placeholder — the users.password_hash
+    # column is NOT NULL and no login endpoint exists to verify against.
+    user = User(email=GUEST_EMAIL, password_hash=hash_password(secrets.token_urlsafe(32)))
+    db.add(user)
+    try:
+        await db.flush()
+    except IntegrityError:
+        # A concurrent request created the guest first — roll back the losing
+        # insert and re-read the winner.
+        await db.rollback()
+        result = await db.execute(select(User).where(User.email == GUEST_EMAIL))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=500, detail="Guest user unavailable")
     return user

@@ -12,9 +12,8 @@ from sqlalchemy import select, func
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_guest_user
 from app.core.response import success_response
-from app.models.user import User
 from app.models.accessibility import AccessibilityLocation, AccessibilityPhoto, AccessibilityDetection
 from app.schemas.accessibility import DetectionResult, LocationResponse, PhotoResponse, UploadResponse
 
@@ -56,7 +55,6 @@ async def upload_photo(
     lng: float = 0.0,
     address: str = "",
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
 ):
     if file.content_type not in settings.ALLOWED_IMAGE_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid file type: {file.content_type}")
@@ -72,6 +70,7 @@ async def upload_photo(
         raise HTTPException(status_code=400, detail="File too large (max 10MB)")
     filepath.write_bytes(content)
 
+    guest = await get_guest_user(db)
     location = AccessibilityLocation(
         geom=f"SRID=4326;POINT({lng} {lat})",
         address=address,
@@ -81,7 +80,7 @@ async def upload_photo(
 
     photo = AccessibilityPhoto(
         location_id=location.id,
-        contributor_id=user.id,
+        contributor_id=guest.id,
         image_url=f"/uploads/{filename}",
     )
     db.add(photo)

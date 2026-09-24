@@ -31,7 +31,7 @@ FlowCast is a **decision-support platform**, not a navigation replacement. It co
 
 | Feature | Status | Description |
 | --- | --- | --- |
-| **JWT Authentication** | ✅ | Register / login / `me` endpoints, bcrypt password hashing, access (15 min) + refresh (7 day) tokens |
+| **Passwordless Access** | ✅ | No login page — the app opens straight into the map; API writes attach to a shared auto-created **Guest** user (bcrypt placeholder credential, no migration) |
 | **BarrierLens Photo Upload** | ✅ | Image validation (JPEG/PNG/WebP, ≤10 MB), stored in `uploads/`, linked to a PostGIS point |
 | **Accessibility Detection** | ⚠️ stub | Detects `ramp`, `stairs`, `elevator`, `handrail`, `obstacle`, `narrow_pathway` with confidence scores — currently randomized, real YOLOv8 model pending |
 | **Multi-Objective Routing** | ⚠️ stub | Returns 4 ranked options scored on time, delay, CO₂, and accessibility — currently randomized, OSRM integration pending |
@@ -55,8 +55,8 @@ FlowCast is a **decision-support platform**, not a navigation replacement. It co
                                ▼
 ┌───────────────────────────────────────────────────────────────────┐
 │                      BACKEND — FastAPI                            │
-│   /auth   /routes   /traffic   /barrierlens   /dashboard          │
-│   JWT auth · response envelope · CORS · static /uploads           │
+│   /routes   /traffic   /barrierlens   /dashboard                  │
+│   guest mode · response envelope · CORS · static /uploads         │
 └──────────────┬───────────────────┬────────────────┬───────────────┘
                ▼                   ▼                ▼
       PostgreSQL 16 + PostGIS    OSRM router     AI/ML layer (/ml)
@@ -75,7 +75,7 @@ FlowCast is a **decision-support platform**, not a navigation replacement. It co
 | Frontend | React 18, Vite 6, Tailwind CSS 3, React Router 7, Zustand, Leaflet / React-Leaflet, lucide-react |
 | Backend | Python 3.11, FastAPI, SQLAlchemy 2 (async), Pydantic v2, Alembic |
 | Database | PostgreSQL 16 + PostGIS 3.4 (`postgis/postgis:16-3.4`) |
-| Auth | `python-jose` JWT, `passlib[bcrypt]` |
+| Auth | none — passwordless shared Guest user; `python-jose` / `bcrypt` helpers remain in `core/security.py` |
 | Routing | OSRM (`osrm/osrm-backend`) — service defined, needs pilot `.osrm` data |
 | ML (planned) | YOLOv8 / Ultralytics (detection), XGBoost (traffic prediction), OpenCV |
 | Infra | Docker Compose, nginx (frontend + reverse proxy) |
@@ -91,7 +91,6 @@ flowcast-code/
 │   ├── app/
 │   │   ├── main.py               # FastAPI app, CORS, static mounts
 │   │   ├── api/
-│   │   │   ├── auth/router.py    # register, login, me
 │   │   │   └── routes/           # traffic, barrierlens, route, dashboard
 │   │   ├── core/                 # config, database, security, response
 │   │   ├── models/               # SQLAlchemy models (PostGIS geometry)
@@ -101,9 +100,9 @@ flowcast-code/
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/                # AuthPage, CommuterApp, Dashboard
+│   │   ├── pages/                # CommuterApp, Dashboard
 │   │   ├── components/           # Map, RoutePanel, BarrierLens
-│   │   ├── services/api.js       # fetch wrapper (Bearer token)
+│   │   ├── services/api.js       # fetch wrapper
 │   │   └── store/useStore.js     # Zustand store
 │   ├── nginx.conf                # /api + /uploads proxy
 │   └── Dockerfile
@@ -283,16 +282,13 @@ Every successful response uses the same shape:
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
-| `POST` | `/auth/register` | — | Create account → returns access + refresh tokens |
-| `POST` | `/auth/login` | — | Sign in → returns access + refresh tokens |
-| `GET` | `/auth/me` | Bearer | Current user profile |
 | `GET` | `/traffic/predictions?lat=&lng=` | — | Predictions within the next hour around a point |
 | `GET` | `/traffic/hotspots` | — | Congestion hotspot aggregates |
-| `POST` | `/barrierlens/upload?lat=&lng=&address=` | Bearer | Upload photo (`multipart/form-data`, field `file`), run detection, store results |
+| `POST` | `/barrierlens/upload?lat=&lng=&address=` | — | Upload photo (`multipart/form-data`, field `file`), run detection, store results |
 | `GET` | `/barrierlens/locations?lat=&lng=` | — | Scanned locations with accessibility scores |
 | `GET` | `/barrierlens/locations/{location_id}` | — | Location detail incl. photos and detections |
-| `POST` | `/routes/calculate` | Bearer | Generate 4 ranked route options |
-| `GET` | `/routes/history` | Bearer | Current user's past route requests |
+| `POST` | `/routes/calculate` | — | Generate 4 ranked route options |
+| `GET` | `/routes/history` | — | Recent route requests (shared Guest user) |
 | `GET` | `/dashboard/congestion-summary` | — | Aggregated congestion view |
 | `GET` | `/dashboard/accessibility-gaps` | — | Areas with sparse accessibility data |
 | `GET` | `/dashboard/stats` | — | `active_users`, `locations_scanned`, `total_detections`, `predictions_made` |
@@ -300,21 +296,11 @@ Every successful response uses the same shape:
 
 ### Examples
 
-**Register / login**
-
-```bash
-curl -X POST http://localhost:3000/api/v1/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"you@example.com","password":"strong-password","full_name":"Your Name"}'
-```
-
 **Calculate routes**
 
 ```bash
-TOKEN="<access_token from login>"
-
 curl -X POST http://localhost:3000/api/v1/routes/calculate \
-  -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
   -d '{"origin_lat":12.97,"origin_lng":77.59,"dest_lat":12.99,"dest_lng":77.62,"priority":"fast"}'
 ```
 
@@ -344,7 +330,6 @@ curl -X POST http://localhost:3000/api/v1/routes/calculate \
 
 ```bash
 curl -X POST "http://localhost:3000/api/v1/barrierlens/upload?lat=12.97&lng=77.59&address=Main%20St" \
-  -H "Authorization: Bearer $TOKEN" \
   -F "file=@photo.jpg"
 ```
 
@@ -365,7 +350,7 @@ curl -X POST "http://localhost:3000/api/v1/barrierlens/upload?lat=12.97&lng=77.5
 
 Uploads are served back at `http://localhost:3000/uploads/<filename>` (proxied to the backend).
 
-**Errors** use FastAPI's standard shape, e.g. `{"detail": "Invalid credentials"}` with status `401`, or a Pydantic validation array with status `422`.
+**Errors** use FastAPI's standard shape, e.g. `{"detail": "Location not found"}` with status `404`, or a Pydantic validation array with status `422`.
 
 ---
 
@@ -373,11 +358,10 @@ Uploads are served back at `http://localhost:3000/uploads/<filename>` (proxied t
 
 | Route | Page | Notes |
 | --- | --- | --- |
-| `/auth` | `AuthPage` | Register / login |
-| `/` | `CommuterApp` | Map + route panel + BarrierLens upload; redirects to `/auth` when logged out |
-| `/dashboard` | `Dashboard` | City planner metrics, congestion summary, accessibility gaps |
+| `/` | `CommuterApp` | Landing page — map + route panel + BarrierLens upload; no login required |
+| `/dashboard` | `Dashboard` | City planner metrics, congestion summary, accessibility gaps (linked from the map header and back) |
 
-The token is stored client-side (`localStorage.token`) and attached by `src/services/api.js`. Design tokens (route colors: Fast `#2563EB`, Green `#10B981`, Reliable `#F59E0B`, Accessible `#8B5CF6`) are documented in [`brain/design.md`](brain/design.md).
+There is no login page and no token: `src/services/api.js` calls the API directly, and the backend attributes writes to its shared Guest user. Design tokens (route colors: Fast `#2563EB`, Green `#10B981`, Reliable `#F59E0B`, Accessible `#8B5CF6`) are documented in [`brain/design.md`](brain/design.md).
 
 Useful commands:
 

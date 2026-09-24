@@ -5,12 +5,12 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_guest_user
 from app.core.response import success_response
-from app.models.user import User
 from app.models.route import RouteRequest, RouteResult
 from app.schemas.route import RouteCalculateRequest, RouteCalculateResponse, RouteOption
 
@@ -67,10 +67,10 @@ def generate_route_options(origin_lat: float, origin_lng: float, dest_lat: float
 async def calculate_routes(
     body: RouteCalculateRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
 ):
+    guest = await get_guest_user(db)
     request = RouteRequest(
-        user_id=user.id,
+        user_id=guest.id,
         origin=f"SRID=4326;POINT({body.origin_lng} {body.origin_lat})",
         destination=f"SRID=4326;POINT({body.dest_lng} {body.dest_lat})",
         priority=body.priority,
@@ -99,10 +99,10 @@ async def calculate_routes(
 @router.get("/history")
 async def get_history(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
 ):
+    guest = await get_guest_user(db)
     result = await db.execute(
-        select(RouteRequest).where(RouteRequest.user_id == user.id).order_by(RouteRequest.created_at.desc()).limit(20)
+        select(RouteRequest).where(RouteRequest.user_id == guest.id).order_by(RouteRequest.created_at.desc()).limit(20)
     )
     requests = result.scalars().all()
     return success_response(data=[{
