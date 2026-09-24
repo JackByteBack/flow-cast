@@ -1,0 +1,62 @@
+# Production stack for the FlowCast API server.
+#
+#   Backend (FastAPI + Postgres/PostGIS) + Caddy (automatic HTTPS)
+#   The frontend stays on Vercel and proxies /api and /uploads here.
+#
+# Usage:  cp .env.example .env   (edit it)   then   docker compose up -d --build
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-flowcast}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-flowcast}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    # No host port published — the database is reachable only on the compose network.
+
+  backend:
+    build: ../backend
+    env_file: .env
+    environment:
+      # Inside the compose network the DB host is `db`, not localhost.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-flowcast}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}@db:5432/${POSTGRES_DB:-flowcast}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-flowcast}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env}@db:5432/${POSTGRES_DB:-flowcast}
+    # Run migrations, then serve without --reload (production).
+    command: sh -c "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    volumes:
+      - uploads:/app/uploads   # BarrierLens photos survive rebuilds
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    environment:
+      BACKEND_DOMAIN: ${BACKEND_DOMAIN:?Set BACKEND_DOMAIN in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

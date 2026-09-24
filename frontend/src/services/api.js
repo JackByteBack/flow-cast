@@ -1,6 +1,8 @@
 // API client: fetch wrapper for the FlowCast + BarrierLens backend (envelope-aware).
 
-const BASE = '/api/v1';
+// On Vercel the /api prefix is rewritten (proxied) to the backend — see vercel.json.
+// Set VITE_API_BASE=https://your-backend-domain/api/v1 to bypass the proxy instead.
+const BASE = import.meta.env.VITE_API_BASE || '/api/v1';
 
 // Safari throws a cryptic TypeError ("The string did not match the expected pattern.")
 // when the response body isn't JSON — e.g. a gateway/proxy 404 page instead of the API.

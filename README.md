@@ -204,6 +204,41 @@ Notes:
 
 ---
 
+## Production Deployment (Docker on a VPS)
+
+The live site on Vercel is only the static frontend — API calls need the backend
+running on a public server. The repo ships a production stack in **`deploy/`**
+(FastAPI + Postgres/PostGIS + Caddy with automatic HTTPS).
+
+How it fits together:
+
+```
+browser ──► https://flow-cast-ashen.vercel.app        (Vercel, static React)
+                 │  vercel.json rewrites:
+                 ├── /api/*     ──► https://YOUR-BACKEND-DOMAIN/api/*
+                 └── /uploads/* ──► https://YOUR-BACKEND-DOMAIN/uploads/*
+                                        │
+                                        └──► Caddy (443) ──► FastAPI ──► Postgres
+```
+
+Step-by-step runbook (VPS setup, DNS, migrations, Vercel wiring, updates,
+troubleshooting): **[`deploy/README.md`](deploy/README.md)**.
+
+Quick version:
+
+```bash
+# on the VPS
+git clone https://github.com/JackByteBack/flow-cast.git
+cd "flowcast code/deploy" && cp .env.example .env && nano .env   # domain + secrets
+./deploy.sh                                                      # builds, migrates, waits for /health
+
+# on your machine — point Vercel at the backend, then push
+# edit frontend/vercel.json, replace https://api.YOUR-DOMAIN.example (both lines)
+git add frontend/vercel.json && git commit -m "wire Vercel to VPS backend" && git push
+```
+
+---
+
 ## Configuration Reference
 
 Copy `.env.example` → `.env`. All values are read by `backend/app/core/config.py` (Pydantic Settings).

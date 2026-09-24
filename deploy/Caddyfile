@@ -1,0 +1,14 @@
+# Reverse proxy for the FlowCast API.
+# `{$BACKEND_DOMAIN}` is read from the container environment (set in deploy/.env).
+# Caddy automatically provisions and renews a Let's Encrypt certificate for it.
+
+{$BACKEND_DOMAIN} {
+	encode gzip
+
+	# BarrierLens photo uploads are allowed up to 10 MB.
+	request_body {
+		max_size 12MB
+	}
+
+	reverse_proxy backend:8000
+}
