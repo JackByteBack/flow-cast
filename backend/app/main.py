@@ -40,6 +40,19 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 app.include_router(api_router)
 
 
+@app.get("/", include_in_schema=False)
+async def root():
+    """Service info — so opening the bare domain in a browser isn't a mystery 404."""
+    return {
+        "service": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "status": "ok",
+        "health": "/health",
+        "docs": "/docs",
+        "api_base": "/api/v1",
+    }
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": settings.APP_VERSION}
